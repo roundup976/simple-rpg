@@ -1,5 +1,8 @@
 extends KinematicBody2D
 
+# Custom signals
+signal player_stats_changed()
+
 # Player movement speed
 export var speed = 75
 
@@ -11,6 +14,38 @@ var last_direction = Vector2(0, 1)
 
 # If the attack animation is playing (since animate player runs continuously)
 var attack_playing = false
+
+# Player stats
+var health = 100
+var health_max = 100
+var health_regen = 1
+var mana = 100
+var mana_max = 100
+var mana_regen = 2
+
+# Battle stats
+var fireball_cost = 25
+
+
+# Called when scene forst enters the scene tree
+func _ready():
+	emit_signal("player_stats_changed", self)
+
+
+# Called every frame, delta is time since last call
+func _process(delta):
+	# Regen mana
+	var new_mana = min(mana + mana_regen * delta, mana_max)
+	if new_mana != mana:
+		mana = new_mana
+		emit_signal("player_stats_changed", self)
+		
+	#Regen health
+	var new_health = min(health + health_regen * delta, health_max)
+	if new_health != health:
+		health = new_health
+		emit_signal("player_stats_changed", self)
+
 
 func _physics_process(delta):
 	# Get player input
@@ -45,8 +80,8 @@ func _physics_process(delta):
 		# Annimate player based on direction when not attacking
 		if not attack_playing:
 			animate_player(direction)
-	
-	
+
+
 func animate_player(direction: Vector2):
 	if direction != Vector2.ZERO:
 		# update last_direction gradually to eliminate stick bounce
@@ -62,9 +97,8 @@ func animate_player(direction: Vector2):
 		var animation = get_animation_direction(last_direction) + "_idle"
 		# Play idle animation
 		$Sprite.play(animation)
-		
-		
-		
+
+
 func get_animation_direction(direction: Vector2):
 	var norm_direction = direction.normalized()
 	# 0.707 = sqrt(2)/2 radians or 45 deg
@@ -78,7 +112,7 @@ func get_animation_direction(direction: Vector2):
 	elif norm_direction.x >= 0.707:
 		return "right"
 	return "down"
-	
+
 
 # Events that specifically involve the player
 func _input_event(viewport, event, shape_idx):
@@ -95,14 +129,20 @@ func _input(event):
 			drag_enabled = false
 			
 	# Attacking
-	if event.is_action_pressed("ui_attack"):
+	# next line keeps player from freezing on attack frame
+	if attack_playing == true and $Sprite.frame == 2:
+		attack_playing = false
+	elif event.is_action_pressed("ui_attack"):
 		attack_playing = true
 		var animation = get_animation_direction(last_direction) + "_attack"
 		$Sprite.play(animation)
 	elif event.is_action_pressed("ui_fireball"):
-		attack_playing = true
-		var animation = get_animation_direction(last_direction) + "_fireball"
-		$Sprite.play(animation)
+		if mana >= fireball_cost:
+			mana = mana - fireball_cost
+			emit_signal("player_stats_changed", self)
+			attack_playing = true
+			var animation = get_animation_direction(last_direction) + "_fireball"
+			$Sprite.play(animation)
 
 
 func _on_Sprite_animation_finished():
